@@ -18,6 +18,30 @@ from PIL import ImageDraw
 import asyncio
 import edge_tts
 
+def create_flashcard(text, index):
+    """Draws a key point onto a digital flashcard image."""
+    wrapper = textwrap.TextWrapper(width=50)
+    lines = wrapper.wrap(text)
+    
+    # Create a nice wide index card shape (600x350)
+    img = Image.new('RGB', (600, 350), color=(253, 253, 248)) # Off-white card color
+    d = ImageDraw.Draw(img)
+    
+    # Draw a colored top border for style
+    d.rectangle([0, 0, 600, 20], fill=(65, 105, 225)) 
+    
+    # Add Card Number
+    d.text((20, 40), f"Key Point {index}", fill=(100, 100, 100))
+    
+    # Write the text lines
+    y_text = 100
+    for line in lines:
+        d.text((40, y_text), line, fill=(10, 10, 10))
+        y_text += 25
+        
+    bio = io.BytesIO()
+    img.save(bio, format='PNG')
+    return bio.getvalue()
 # --- THE FILE EXPORT FACTORY ---
 def create_audio(text, speed_multiplier):
     # Convert our speed multiplier (1.5x) into the percentage format the API requires ("+50%")
@@ -183,18 +207,15 @@ if len(st.session_state.messages) == 0:
         if st.button("🎬 Create video", use_container_width=True): 
             quick_prompt("Help me generate a video concept.")
             st.rerun()
-# --- 5. THE ADVANCED CHAT HISTORY (With Actions) ---
+# --- 5. THE ADVANCED CHAT HISTORY (With Actions & Tools) ---
 for i, msg in enumerate(st.session_state.messages):
     avatar_icon = "🧑‍💻" if msg["role"] == "user" else "✨"
     
     with st.chat_message(msg["role"], avatar=avatar_icon):
         
-        # 1. Check if the user clicked "Edit" for this specific message
+        # 1. EDIT MODE
         if st.session_state.get(f"edit_mode_{i}", False):
-            # Show an interactive text box instead of normal text
             new_text = st.text_area("Update message:", value=msg["content"], key=f"text_area_{i}")
-            
-            # Save or Cancel buttons for the edit
             edit_col1, edit_col2, _ = st.columns([1, 1, 4])
             with edit_col1:
                 if st.button("✅ Save", key=f"save_edit_{i}"):
@@ -206,30 +227,89 @@ for i, msg in enumerate(st.session_state.messages):
                     st.session_state[f"edit_mode_{i}"] = False
                     st.rerun()
                     
-        # 2. Normal Display Mode
+        # 2. NORMAL DISPLAY MODE
         else:
             st.markdown(msg["content"])
             
-            # The Action Bar (Small buttons packed tightly underneath the message)
-            st.write("") # Small spacer
-            # We added a 5th column for Study Tools
-            act_col1, act_col2, act_col3, act_col4, act_col5 = st.columns([1.2, 1.2, 1.2, 1.2, 1.5])
+            # THE 5 ACTION COLUMNS
+            st.write("") 
+            act_col1, act_col2, act_col3, act_col4, act_col5 = st.columns([1.2, 1.2, 1.2, 1.5, 1.5])
             
-            # ... (Keep Edit, Save, Copy, and Listen columns exactly as they are) ...
-            
-            # --- THE NEW STUDY TOOLS COLUMN ---
-            with act_col5:
-                with st.popover("🛠️ Study Tools", help="Turn this text into a learning aid"):
-                    st.caption("Auto-Generate:")
+            # COLUMN 1: EDIT
+            with act_col1:
+                if st.button("✏️ Edit", key=f"edit_btn_{i}", help="Edit this message"):
+                    st.session_state[f"edit_mode_{i}"] = True
+                    st.rerun()
                     
+            # COLUMN 2: SAVE AS EXPORTS
+            with act_col2:
+                with st.popover("💾 Save..."):
+                    st.download_button("📄 PDF Document", data=create_pdf(msg["content"]), file_name=f"Note_{i}.pdf", mime="application/pdf", key=f"pdf_{i}", use_container_width=True)
+                    st.download_button("📝 Word Document", data=create_docx(msg["content"]), file_name=f"Note_{i}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"docx_{i}", use_container_width=True)
+                    st.download_button("📊 Excel Sheet", data=create_excel(msg["content"]), file_name=f"Note_{i}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"xls_{i}", use_container_width=True)
+                    st.download_button("🖼️ Image File", data=create_image(msg["content"]), file_name=f"Note_{i}.png", mime="image/png", key=f"img_{i}", use_container_width=True)
+            
+            # COLUMN 3: COPY
+            with act_col3:
+                with st.popover("📋 Copy"):
+                    st.caption("Click the copy icon top right:")
+                    st.code(msg["content"], language="markdown")
+                    
+            # COLUMN 4: PREMIUM AUDIO
+            with act_col4:
+                with st.popover("🔊 Listen"):
+                    selected_speed = st.radio("Speed", [1.0, 1.25, 1.5], horizontal=True, key=f"speed_{i}", label_visibility="collapsed")
+                    if st.button("▶️ Play Audio", key=f"gen_audio_{i}", use_container_width=True):
+                        with st.spinner("Synthesizing..."):
+                            try:
+                                audio_bytes = create_audio(msg["content"], selected_speed)
+                                st.audio(audio_bytes, format="audio/mp3")
+                            except Exception as e:
+                                st.error(f"Audio failed: {e}")
+                                
+            # COLUMN 5: STUDY TOOLS
+            with act_col5:
+                with st.popover("🛠️ Tools"):
                     if st.button("🧠 Mind Map", key=f"mm_{i}", use_container_width=True):
-                        # Secretly tells the AI to read its own last message and convert it
-                        st.session_state.messages.append({"role": "user", "content": f"Convert the information above into a highly structured, text-based Mind Map using bullet points and hierarchy."})
+                        st.session_state.messages.append({"role": "user", "content": f"Convert the information above into a highly structured, text-based Mind Map using bullet points."})
                         st.rerun()
                         
-                    if st.button("📇 Flashcards", key=f"fc_{i}", use_container_width=True):
-                        st.session_state.messages.append({"role": "user", "content": f"Extract the key facts from the information above and create 5 quick-study flashcards in a strict Question/Answer format."})
+                    if st.button("📇 Image Cards", key=f"fc_{i}", use_container_width=True):
+                        # Activate the flashcard display mode for this specific message
+                        st.session_state[f"show_cards_{i}"] = True
                         st.rerun()
+            
+            # --- THE FLASHCARD RENDERER ---
+            # If the user clicked "Image Cards", we render them directly below the buttons
+            if st.session_state.get(f"show_cards_{i}", False):
+                st.divider()
+                st.markdown("#### 📇 Key Point Flashcards")
+                
+                # We extract clean sentences/bullets from the AI's output
+                raw_lines = msg["content"].split('\n')
+                clean_lines = [line.strip('-*# ') for line in raw_lines if len(line.strip()) > 30]
+                
+                # Take up to the top 4 most important points
+                key_points = clean_lines[:4] 
+                
+                if not key_points:
+                    st.warning("Not enough text to generate cards.")
+                else:
+                    # Create a column for each image card
+                    card_cols = st.columns(len(key_points))
+                    for idx, point in enumerate(key_points):
+                        # Generate the image
+                        card_img_bytes = create_flashcard(point, idx + 1)
+                        # Display the image
+                        card_cols[idx].image(card_img_bytes, use_container_width=True)
+                        # Add a download button under each image
+                        card_cols[idx].download_button("💾 Save Card", card_img_bytes, file_name=f"flashcard_{idx+1}.png", mime="image/png", key=f"dl_card_{i}_{idx}", use_container_width=True)
+                
+                # Close button to hide the cards again
+                if st.button("❌ Close Cards", key=f"close_fc_{i}"):
+                    st.session_state[f"show_cards_{i}"] = False
+                    st.rerun()
+                    
 # --- 6. THE BOTTOM CONTROL BAR (Screenshot 1 Replication) ---
 # We build a floating control deck right above the text input
 st.write("") 
