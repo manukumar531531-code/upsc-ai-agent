@@ -1,3 +1,7 @@
+import io
+import pypdf
+import docx
+from PIL import Image
 import streamlit as st
 import time
 from google import genai
@@ -61,17 +65,64 @@ if "agent" not in st.session_state:
             tools=[search_current_affairs, read_webpage], 
         )
     )
-# --- 4.5. THE SIDEBAR (Drag-and-Drop Uploader) ---
+# --- 4.5. THE MULTIMODAL SIDEBAR ---
 with st.sidebar:
-    st.header("📂 Upload Study Notes")
-    st.caption("Drag and drop a file to let the AI read it.")
+    st.header("📂 Universal File Uploader")
+    st.caption("Upload Notes, Images, or Audio files.")
     
-    # The modern drag-and-drop widget
+    # We expanded the accepted file types!
     uploaded_file = st.file_uploader(
-        "Upload a document", 
-        type=['txt', 'csv'], # Restricting to text/csv for simple reading right now
+        "Drop a file here", 
+        type=['txt', 'csv', 'pdf', 'docx', 'jpg', 'jpeg', 'png', 'mp3', 'wav'], 
         accept_multiple_files=False
     )
+    
+    if uploaded_file is not None:
+        file_ext = uploaded_file.name.split('.')[-1].lower()
+        st.success(f"File loaded: {uploaded_file.name}")
+        
+        try:
+            # 1. Handle Plain Text & CSV
+            if file_ext in ['txt', 'csv']:
+                st.session_state.upload_type = 'text'
+                st.session_state.uploaded_content = uploaded_file.read().decode("utf-8")
+                st.info("Text extracted and ready!")
+                
+            # 2. Handle PDFs
+            elif file_ext == 'pdf':
+                st.session_state.upload_type = 'text'
+                reader = pypdf.PdfReader(uploaded_file)
+                extracted_text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+                st.session_state.uploaded_content = extracted_text
+                st.info("PDF text extracted and ready!")
+                
+            # 3. Handle Word Documents
+            elif file_ext == 'docx':
+                st.session_state.upload_type = 'text'
+                doc = docx.Document(uploaded_file)
+                extracted_text = "\n".join([para.text for para in doc.paragraphs])
+                st.session_state.uploaded_content = extracted_text
+                st.info("Word document text extracted!")
+                
+            # 4. Handle Images (Vision)
+            elif file_ext in ['jpg', 'jpeg', 'png']:
+                st.session_state.upload_type = 'image'
+                image = Image.open(uploaded_file)
+                st.session_state.uploaded_content = image
+                st.image(image, caption="Ready for AI Analysis", use_container_width=True)
+                
+            # 5. Handle Audio
+            elif file_ext in ['mp3', 'wav']:
+                st.session_state.upload_type = 'audio'
+                audio_bytes = uploaded_file.read()
+                mime_type = 'audio/mp3' if file_ext == 'mp3' else 'audio/wav'
+                # Package it for Gemini
+                st.session_state.uploaded_content = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                st.audio(audio_bytes, format=mime_type)
+                st.info("Audio loaded and ready for analysis!")
+                
+        except Exception as e:
+            st.error(f"Failed to process file: {e}")
     
     # What happens when the user drops a file
     if uploaded_file is not None:
@@ -101,20 +152,32 @@ if user_prompt := st.chat_input("Ask a question or paste a link..."):
         st.markdown(user_prompt)
         
     # Generate and show AI response
+    # Generate and show AI response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         message_placeholder.markdown("*(Thinking...)*")
         
         try:
-            # Check if a document was uploaded
-            if "uploaded_context" in st.session_state and st.session_state.uploaded_context:
-                # Secretly attach the document text to the user's prompt so the AI can read it
-                augmented_prompt = f"Here is the reference document:\n\n{st.session_state.uploaded_context}\n\nUser Question: {user_prompt}"
-                response = st.session_state.agent.send_message(augmented_prompt)
-            else:
-                # Normal chat if no document is uploaded
-                response = st.session_state.agent.send_message(user_prompt)
+            # We put the user's text prompt into a list
+            prompt_data = [user_prompt]
+            
+            # Check if a file is currently loaded in the sidebar
+            if "uploaded_content" in st.session_state and st.session_state.uploaded_content:
+                u_type = st.session_state.upload_type
+                u_content = st.session_state.uploaded_content
                 
+                # If it's a document, we just glue the text to the prompt
+                if u_type == 'text':
+                    # We limit to 15,000 chars so massive PDFs don't crash the UI memory
+                    prompt_data[0] = f"Reference Document:\n\n{u_content[:15000]}\n\nUser Question: {user_prompt}"
+                    
+                # If it's an Image or Audio, we pass the actual media file directly to Gemini's brain
+                elif u_type in ['image', 'audio']:
+                    prompt_data.insert(0, u_content)
+            
+            # Send the combined data (Text + Media) to the agent
+            response = st.session_state.agent.send_message(prompt_data)
+            
             message_placeholder.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             
