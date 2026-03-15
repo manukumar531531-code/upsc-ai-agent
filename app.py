@@ -2,7 +2,7 @@ import streamlit as st
 import time
 from google import genai
 from google.genai import types
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 import requests
 from bs4 import BeautifulSoup
 
