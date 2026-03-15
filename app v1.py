@@ -10,6 +10,51 @@ from google.genai import types
 from duckduckgo_search import DDGS
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+import textwrap
+from fpdf import FPDF
+from PIL import ImageDraw
+
+# --- THE FILE EXPORT FACTORY ---
+def create_pdf(text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", size=12)
+    # FPDF struggles with emojis, so we safely encode the text to standard characters
+    safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 7, txt=safe_text)
+    return bytes(pdf.output())
+
+def create_docx(text):
+    doc = docx.Document()
+    doc.add_paragraph(text)
+    bio = io.BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
+
+def create_excel(text):
+    # Splits the text by new lines so it looks clean in Excel rows
+    df = pd.DataFrame({"Study Notes": text.split('\n')})
+    bio = io.BytesIO()
+    df.to_excel(bio, index=False, engine='openpyxl')
+    return bio.getvalue()
+
+def create_image(text):
+    # Wraps the text so it doesn't run off the screen
+    wrapper = textwrap.TextWrapper(width=80)
+    lines = wrapper.wrap(text)
+    height = len(lines) * 20 + 60
+    img = Image.new('RGB', (800, max(height, 200)), color=(240, 242, 246))
+    d = ImageDraw.Draw(img)
+    
+    y_text = 30
+    for line in lines:
+        d.text((30, y_text), line, fill=(10, 10, 10))
+        y_text += 20
+        
+    bio = io.BytesIO()
+    img.save(bio, format='PNG')
+    return bio.getvalue()
 
 # --- 1. PAGE SETUP & CSS ---
 st.set_page_config(page_title="Advanced AI Agent", page_icon="✨", layout="centered")
