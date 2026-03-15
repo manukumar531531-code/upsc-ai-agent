@@ -6,3 +6,6 @@ requests
 pypdf
 python-docx
 pillow
+pandas
+openpyxl
+fpdf2
