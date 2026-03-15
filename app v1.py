@@ -345,37 +345,41 @@ with ctrl_col4:
     # The Mic icon
     st.button("🎙️", help="Voice Input coming soon")
 
-# --- 7. THE CHAT INPUT & LOGIC ---
+# --- 7. THE CHAT INPUT & FAILSAFE LOGIC ---
+
+# 1. Capture user input and instantly refresh the screen
 if user_prompt := st.chat_input("Ask a question..."):
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     st.rerun()
 
-# Trigger AI response if the last message was from the user
-# Trigger AI response if the last message was from the user
+# 2. Trigger the AI ONLY if the last person to speak was the user
 if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="✨"):
         try:
             prompt_data = [st.session_state.messages[-1]["content"]]
             
+            # Attach file context if one is uploaded
             if "uploaded_file" in st.session_state and st.session_state.uploaded_file:
                 prompt_data[0] = f"[File attached: {st.session_state.uploaded_file.name}] {prompt_data[0]}"
                 
-            # --- THE NEW THINKING UI ---
             with st.status("🧠 Agent is thinking and gathering sources...", expanded=True) as status:
-                st.write("Analyzing query context...")
-                st.write("Accessing web tools and reading documents if necessary...")
+                st.write("Connecting to AI engine...")
                 
-                # The AI does its processing here while the box spins
+                # The actual API call
                 response_stream = st.session_state.agent.send_message_stream(prompt_data)
                 
-                # Collapse the box and show a success message when it's ready to type
                 status.update(label="💡 Answer synthesized!", state="complete", expanded=False)
                 
-            # The typewriter effect streams the final answer below the collapsed thinking box
+            # Stream the text to the screen
             full_response = st.write_stream((chunk.text for chunk in response_stream))
             
-            if not incognito:
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
+            # Save the successful response to memory
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            st.rerun() # Force a UI refresh to lock the message in and show the action buttons
             
         except Exception as e:
-            st.error(f"Error: {e}")
+            # THE GHOST TRAP: If anything fails, write it into the chat history permanently
+            error_msg = f"⚠️ System Failure: {str(e)}"
+            st.error(error_msg)
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            st.rerun() # Refresh so the user actually sees the error!
