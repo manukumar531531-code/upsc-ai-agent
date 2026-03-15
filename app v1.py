@@ -15,15 +15,32 @@ import pandas as pd
 import textwrap
 from fpdf import FPDF
 from PIL import ImageDraw
-from gtts import gTTS
+import asyncio
+import edge_tts
 
 # --- THE FILE EXPORT FACTORY ---
-def create_audio(text):
-    # gTTS requires plain text, so we clean it up slightly if needed
-    tts = gTTS(text=text, lang='en', slow=False)
-    bio = io.BytesIO()
-    tts.write_to_fp(bio)
-    return bio.getvalue()
+def create_audio(text, speed_multiplier):
+    # Convert our speed multiplier (1.5x) into the percentage format the API requires ("+50%")
+    rate_percentage = int((speed_multiplier - 1.0) * 100)
+    rate_str = f"+{rate_percentage}%" if rate_percentage >= 0 else f"{rate_percentage}%"
+    
+    # Premium Neural Voice (Indian English context)
+    voice = "en-IN-NeerjaNeural" 
+    
+    # Streamlit requires a fresh async loop for background processing
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    communicate = edge_tts.Communicate(text, voice, rate=rate_str)
+    
+    audio_data = bytearray()
+    
+    async def get_audio():
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data.extend(chunk["data"])
+                
+    loop.run_until_complete(get_audio())
+    return bytes(audio_data)
     
 def create_pdf(text):
     pdf = FPDF()
@@ -202,15 +219,29 @@ for i, msg in enumerate(st.session_state.messages):
                     st.caption("Click the copy icon in the top right:")
                     st.code(msg["content"], language="markdown")
                     
-            # --- THE NEW AUDIO COLUMN ---
+            # --- THE NEW PREMIUM AUDIO COLUMN ---
             with act_col4:
-                with st.popover("🔊 Listen", help="Read this message out loud"):
-                    st.caption("Generate voice audio:")
-                    # We use a button inside the popover so it only generates the audio when explicitly clicked (saves bandwidth)
+                with st.popover("🔊 Listen", help="Premium Neural Voice"):
+                    st.caption("Playback Speed:")
+                    
+                    # 1. The Speed Selection Buttons
+                    selected_speed = st.radio(
+                        "Speed", 
+                        options=[1.0, 1.25, 1.5, 2.0], 
+                        horizontal=True, 
+                        key=f"speed_{i}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    # 2. The Generation Button
                     if st.button("▶️ Generate Audio", key=f"gen_audio_{i}", use_container_width=True):
-                        with st.spinner("Synthesizing voice..."):
-                            audio_bytes = create_audio(msg["content"])
-                            st.audio(audio_bytes, format="audio/mp3")
+                        with st.spinner(f"Synthesizing at {selected_speed}x speed..."):
+                            try:
+                                # We pass the text AND the chosen speed to our new factory
+                                audio_bytes = create_audio(msg["content"], selected_speed)
+                                st.audio(audio_bytes, format="audio/mp3")
+                            except Exception as e:
+                                st.error(f"Audio failed: {e}")
 # --- 6. THE BOTTOM CONTROL BAR (Screenshot 1 Replication) ---
 # We build a floating control deck right above the text input
 st.write("") 
