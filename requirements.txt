@@ -9,4 +9,4 @@ pillow
 pandas
 openpyxl
 fpdf2
-edge-gtts
+edge-tts
