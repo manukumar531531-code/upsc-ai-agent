@@ -183,26 +183,27 @@ with st.sidebar:
             
         except Exception as e:
             st.error(f"Failed to read file: {e}")
-# --- 5. THE CHAT INTERFACE ---
-# Display all past messages
+# --- 7. THE ADVANCED CHAT INTERFACE (Streaming Upgrade) ---
+
+# 1. Display past messages with custom Avatars
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
+    # Set the icon based on who is talking
+    avatar_icon = "🧑‍💻" if msg["role"] == "user" else "✨"
+    with st.chat_message(msg["role"], avatar=avatar_icon):
         st.markdown(msg["content"])
 
-# Capture user input
 if user_prompt := st.chat_input("Ask a question, analyze a file, or paste a link..."):
+    # Add user message to memory and display it
     st.session_state.messages.append({"role": "user", "content": user_prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🧑‍💻"):
         st.markdown(user_prompt)
         
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        message_placeholder.markdown("*(Thinking...)*")
-        
+    # Build the AI's streaming response
+    with st.chat_message("assistant", avatar="✨"):
         try:
             prompt_data = [user_prompt]
             
-            # Inject context if a file is uploaded
+            # Inject context if a file is uploaded in the sidebar
             if "uploaded_content" in st.session_state and st.session_state.uploaded_content:
                 u_type = st.session_state.upload_type
                 u_content = st.session_state.uploaded_content
@@ -212,12 +213,18 @@ if user_prompt := st.chat_input("Ask a question, analyze a file, or paste a link
                 elif u_type in ['image', 'cloud_media']:
                     prompt_data.insert(0, u_content)
             
-            response = st.session_state.agent.send_message(prompt_data)
+            # THE UPGRADE: The smooth loading spinner
+            with st.spinner("Synthesizing answer..."):
+                # We use send_message_stream instead of send_message
+                response_stream = st.session_state.agent.send_message_stream(prompt_data)
+                
+            # THE UPGRADE: st.write_stream automatically creates the real-time typewriter effect!
+            full_response = st.write_stream((chunk.text for chunk in response_stream))
             
-            message_placeholder.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            # Save the fully generated response to memory
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except Exception as e:
             error_msg = f"An error occurred: {str(e)}"
-            message_placeholder.error(error_msg)
+            st.error(error_msg) # Uses a modern red error box instead of plain text
             st.session_state.messages.append({"role": "assistant", "content": error_msg})
