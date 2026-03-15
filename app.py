@@ -52,7 +52,8 @@ if "messages" not in st.session_state:
 
 if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
-        model='gemini-2.5-flash',
+        # THE UPGRADE: Swap 'gemini-2.5-flash' for the newest model available to your API key
+        model='gemini-3.0-flash', # Or try 'gemini-3.1-pro' if your API tier supports it
         config=types.GenerateContentConfig(
             system_instruction="""You are a public UPSC study assistant. 
             Format all answers clearly using Markdown.
