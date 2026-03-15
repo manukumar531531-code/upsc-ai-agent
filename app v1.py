@@ -48,12 +48,9 @@ def read_webpage(url: str) -> str:
     except Exception as e: return f"Failed to read link: {e}"
 
 # --- 2. SESSION STATE ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [] # Start empty for the welcome screen
-
 if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
-        model='gemini-3.0-flash', 
+        model='gemini-3-flash-preview',  # <--- THE FIX IS HERE
         config=types.GenerateContentConfig(
             system_instruction="You are a highly advanced multimodal AI assistant.",
             tools=[search_current_affairs, read_webpage], 
