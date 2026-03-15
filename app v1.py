@@ -142,6 +142,15 @@ def search_current_affairs(topic: str) -> str:
     except Exception as e:
         return f"Search failed: {e}"
 
+def read_webpage(url: str) -> str:
+    """Scrapes readable text from a standard URL."""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return f"Extracted text:\n\n{soup.get_text(separator=' ', strip=True)[:6000]}"
+    except Exception as e: 
+        return f"Failed to read link: {e}"
 # ... (Keep your read_webpage tool here) ...
 
 # --- 2. SESSION STATE (The Upgraded Brain) ---
