@@ -190,25 +190,25 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # Capture user input
-if user_prompt := st.chat_input("Ask a question or paste a link..."):
-    # Show user message
+if user_prompt := st.chat_input("Ask a question, analyze a file, or paste a link..."):
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     with st.chat_message("user"):
         st.markdown(user_prompt)
         
-    # Generate and show AI response
-    # Generate and show AI response
-    try:
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        message_placeholder.markdown("*(Thinking...)*")
+        
+        try:
             prompt_data = [user_prompt]
             
+            # Inject context if a file is uploaded
             if "uploaded_content" in st.session_state and st.session_state.uploaded_content:
                 u_type = st.session_state.upload_type
                 u_content = st.session_state.uploaded_content
                 
                 if u_type == 'text':
                     prompt_data[0] = f"Reference Document:\n\n{u_content[:15000]}\n\nUser Question: {user_prompt}"
-                    
-                # Handle Images AND the new Cloud Media (Audio/Video)
                 elif u_type in ['image', 'cloud_media']:
                     prompt_data.insert(0, u_content)
             
