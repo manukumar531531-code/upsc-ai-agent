@@ -104,73 +104,85 @@ except:
 client = genai.Client(api_key=api_key)
 
 # --- (Keep your Tools here: search_current_affairs, read_webpage) ---
+# --- THE UPGRADED SEARCH TOOL ---
 def search_current_affairs(topic: str) -> str:
+    """Searches the internet for the absolute latest data and extracts exact URLs."""
     try:
-        results = DDGS().news(topic, max_results=3)
-        return "\n\n".join([f"Headline: {r.get('title')}\nSnippet: {r.get('body')}" for r in results])
-    except Exception as e: return f"Search failed: {e}"
+        # We use .text() instead of .news() to get a wider range of verified facts
+        results = DDGS().text(topic, max_results=3, timelimit='w') # 'w' limits to the past week!
+        search_data = ""
+        for r in results:
+            # We explicitly grab the 'href' to get the exact clickable URL
+            search_data += f"Title: {r.get('title')}\nSnippet: {r.get('body')}\nSource Link: {r.get('href')}\n\n"
+        return search_data if search_data else "No recent data found. Try broadening the search."
+    except Exception as e:
+        return f"Search failed: {e}"
 
-def read_webpage(url: str) -> str:
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        return f"Extracted text:\n\n{soup.get_text(separator=' ', strip=True)[:6000]}"
-    except Exception as e: return f"Failed to read link: {e}"
+# ... (Keep your read_webpage tool here) ...
 
-# --- 2. SESSION STATE ---
-# --- 2. SESSION STATE (The App's Memory) ---
-# This MUST come before the sidebar and chat logic!
+# --- 2. SESSION STATE (The Upgraded Brain) ---
 if "messages" not in st.session_state:
-    st.session_state.messages = [] # Start empty for the welcome screen
+    st.session_state.messages = [] 
 
 if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
         model='gemini-3-flash-preview', 
         config=types.GenerateContentConfig(
-            system_instruction="""You are an elite, highly advanced UPSC AI assistant.
-            RULE 1: Provide clear, detailed, and structured answers using Markdown.
-            RULE 2: At the very end of EVERY response, you MUST include a '📚 Sources & References' section. 
-            - If you used your web search or link reader tools, list the exact URLs, headlines, or domain names you read.
-            - If you did not need the web and relied on your internal memory, explicitly state 'Source: Internal Knowledge Base'.""",
+            # WE INJECT THE CURRENT YEAR SO IT DOESN'T HALLUCINATE PAST DATES
+            system_instruction="""You are an elite UPSC AI. The current date is March 2026.
+            RULE 1: When asked about current affairs, data, or rates (like RBI), YOU MUST USE YOUR SEARCH TOOL. Do not guess.
+            RULE 2: At the very end of EVERY response, include a '📚 Sources' section. You MUST output the exact, clickable URL link provided by the search tool.""",
             tools=[search_current_affairs, read_webpage], 
         )
     )
 
-# --- 3. THE ADVANCED SIDEBAR ---
+# --- 3. THE ADVANCED SIDEBAR (Fixed) ---
 with st.sidebar:
-    st.button("➕ New chat", use_container_width=True, on_click=lambda: st.session_state.messages.clear())
-    st.button("🔍 Search chat", use_container_width=True)
+    # Notice the st.rerun() in the lambda function to force the screen to refresh!
+    st.button("➕ New chat", use_container_width=True, on_click=lambda: [st.session_state.messages.clear(), st.rerun()])
     
-    # Incognito Mode Toggle
+    # We use st.toast to give visual feedback that the buttons are actually working
+    if st.button("🔍 Search chat", use_container_width=True): st.toast("Search feature coming soon!", icon="🔍")
+    
     incognito = st.toggle("🕵️ Incognito mode")
-    if incognito:
-        st.caption("Incognito active: Chats won't be saved to history.")
+    if incognito: st.caption("Incognito active: Chats won't be saved.")
         
     st.divider()
-    
-    st.button("📁 My Stuff", use_container_width=True)
-    st.button("⚙️ Settings", use_container_width=True)
-    st.button("❓ Help", use_container_width=True)
+    if st.button("📁 My Stuff", use_container_width=True): st.toast("Opening your files...", icon="📁")
+    if st.button("⚙️ Settings", use_container_width=True): st.toast("Opening settings...", icon="⚙️")
+    if st.button("❓ Help", use_container_width=True): st.toast("Connecting to support...", icon="❓")
 
-# --- 4. THE WELCOME SCREEN (Quick Actions) ---
-# If chat is empty, show the "Where should we start?" grid
+# --- 4. THE WELCOME SCREEN (Fixed) ---
+# A helper function to process clicks and FORCE a screen refresh
+def quick_prompt(text):
+    st.session_state.messages.append({"role": "user", "content": text})
+    
 if len(st.session_state.messages) == 0:
     st.markdown("<h1 style='text-align: center;'>Where should we start?</h1>", unsafe_allow_html=True)
-    st.write("") # Spacer
+    st.write("") 
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🖼️ Create image", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "Help me create an image."})
-        if st.button("🎸 Create music", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "Help me create some music."})
-        if st.button("✍️ Write anything", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "I need help writing something."})
+        # We now wrap the logic in our new helper function so it actually triggers the chat!
+        if st.button("🖼️ Create image", use_container_width=True): 
+            quick_prompt("Help me create an image.")
+            st.rerun()
+        if st.button("🎸 Create music", use_container_width=True): 
+            quick_prompt("Help me create some music.")
+            st.rerun()
+        if st.button("✍️ Write anything", use_container_width=True): 
+            quick_prompt("I need help writing a study schedule.")
+            st.rerun()
     with col2:
-        if st.button("🏏 Explore cricket", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "Give me the latest updates on cricket."})
-        if st.button("☀️ Boost my day", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "Tell me something positive to boost my day."})
-        if st.button("🎬 Create video", use_container_width=True): st.session_state.messages.append({"role": "user", "content": "Help me generate a video."})
-    
-    st.write("\n\n") # Push the chat input to the bottom
-
+        if st.button("🏏 Explore cricket", use_container_width=True): 
+            quick_prompt("Give me the latest updates on the Indian cricket team.")
+            st.rerun()
+        if st.button("☀️ Boost my day", use_container_width=True): 
+            quick_prompt("Give me a motivational quote for my UPSC preparation.")
+            st.rerun()
+        if st.button("🎬 Create video", use_container_width=True): 
+            quick_prompt("Help me generate a video concept.")
+            st.rerun()
 # --- 5. THE ADVANCED CHAT HISTORY (With Actions) ---
 for i, msg in enumerate(st.session_state.messages):
     avatar_icon = "🧑‍💻" if msg["role"] == "user" else "✨"
@@ -200,52 +212,24 @@ for i, msg in enumerate(st.session_state.messages):
             
             # The Action Bar (Small buttons packed tightly underneath the message)
             st.write("") # Small spacer
-            # We added a 4th column for the Audio button
-            act_col1, act_col2, act_col3, act_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 4])
+            # We added a 5th column for Study Tools
+            act_col1, act_col2, act_col3, act_col4, act_col5 = st.columns([1.2, 1.2, 1.2, 1.2, 1.5])
             
-            # ... (Keep your existing act_col1 for Edit) ...
-            with act_col1:
-                if st.button("✏️ Edit", key=f"edit_btn_{i}", help="Edit this message"):
-                    st.session_state[f"edit_mode_{i}"] = True
-                    st.rerun()
-                    
-            # ... (Keep your existing act_col2 for Save) ...
-            with act_col2:
-                with st.popover("💾 Save As..."):
-                    st.download_button("📄 PDF Document", data=create_pdf(msg["content"]), file_name=f"Note_{i}.pdf", mime="application/pdf", key=f"pdf_{i}", use_container_width=True)
-                    st.download_button("📝 Word Document", data=create_docx(msg["content"]), file_name=f"Note_{i}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"docx_{i}", use_container_width=True)
-                    st.download_button("📊 Excel Spreadsheet", data=create_excel(msg["content"]), file_name=f"Note_{i}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"xls_{i}", use_container_width=True)
-                    st.download_button("🖼️ Image File", data=create_image(msg["content"]), file_name=f"Note_{i}.png", mime="image/png", key=f"img_{i}", use_container_width=True)
+            # ... (Keep Edit, Save, Copy, and Listen columns exactly as they are) ...
             
-            # ... (Keep your existing act_col3 for Copy) ...
-            with act_col3:
-                with st.popover("📋 Copy"):
-                    st.caption("Click the copy icon in the top right:")
-                    st.code(msg["content"], language="markdown")
+            # --- THE NEW STUDY TOOLS COLUMN ---
+            with act_col5:
+                with st.popover("🛠️ Study Tools", help="Turn this text into a learning aid"):
+                    st.caption("Auto-Generate:")
                     
-            # --- THE NEW PREMIUM AUDIO COLUMN ---
-            with act_col4:
-                with st.popover("🔊 Listen", help="Premium Neural Voice"):
-                    st.caption("Playback Speed:")
-                    
-                    # 1. The Speed Selection Buttons
-                    selected_speed = st.radio(
-                        "Speed", 
-                        options=[1.0, 1.25, 1.5, 2.0], 
-                        horizontal=True, 
-                        key=f"speed_{i}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    # 2. The Generation Button
-                    if st.button("▶️ Generate Audio", key=f"gen_audio_{i}", use_container_width=True):
-                        with st.spinner(f"Synthesizing at {selected_speed}x speed..."):
-                            try:
-                                # We pass the text AND the chosen speed to our new factory
-                                audio_bytes = create_audio(msg["content"], selected_speed)
-                                st.audio(audio_bytes, format="audio/mp3")
-                            except Exception as e:
-                                st.error(f"Audio failed: {e}")
+                    if st.button("🧠 Mind Map", key=f"mm_{i}", use_container_width=True):
+                        # Secretly tells the AI to read its own last message and convert it
+                        st.session_state.messages.append({"role": "user", "content": f"Convert the information above into a highly structured, text-based Mind Map using bullet points and hierarchy."})
+                        st.rerun()
+                        
+                    if st.button("📇 Flashcards", key=f"fc_{i}", use_container_width=True):
+                        st.session_state.messages.append({"role": "user", "content": f"Extract the key facts from the information above and create 5 quick-study flashcards in a strict Question/Answer format."})
+                        st.rerun()
 # --- 6. THE BOTTOM CONTROL BAR (Screenshot 1 Replication) ---
 # We build a floating control deck right above the text input
 st.write("") 
