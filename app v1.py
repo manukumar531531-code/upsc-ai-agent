@@ -48,9 +48,14 @@ def read_webpage(url: str) -> str:
     except Exception as e: return f"Failed to read link: {e}"
 
 # --- 2. SESSION STATE ---
+# --- 2. SESSION STATE (The App's Memory) ---
+# This MUST come before the sidebar and chat logic!
+if "messages" not in st.session_state:
+    st.session_state.messages = [] # Start empty for the welcome screen
+
 if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
-        model='gemini-3-flash-preview',  # <--- THE FIX IS HERE
+        model='gemini-3-flash-preview', 
         config=types.GenerateContentConfig(
             system_instruction="You are a highly advanced multimodal AI assistant.",
             tools=[search_current_affairs, read_webpage], 
