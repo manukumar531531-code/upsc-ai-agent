@@ -67,12 +67,16 @@ def create_audio(text, speed_multiplier):
     return bytes(audio_data)
     
 def create_pdf(text):
+    if not text or not text.strip():
+        text = "No content generated." # Prevents crashing if the AI fails
+        
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("helvetica", size=12)
-    # FPDF struggles with emojis, so we safely encode the text to standard characters
     safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 7, txt=safe_text)
+    
+    # Changed 'txt' to 'text' to fix the Deprecation Warning!
+    pdf.multi_cell(0, 7, text=safe_text) 
     return bytes(pdf.output())
 
 def create_docx(text):
@@ -161,10 +165,10 @@ if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
         model='gemini-3-flash-preview', 
         config=types.GenerateContentConfig(
-            # WE INJECT THE CURRENT YEAR SO IT DOESN'T HALLUCINATE PAST DATES
             system_instruction="""You are an elite UPSC AI. The current date is March 2026.
-            RULE 1: When asked about current affairs, data, or rates (like RBI), YOU MUST USE YOUR SEARCH TOOL. Do not guess.
-            RULE 2: At the very end of EVERY response, include a '📚 Sources' section. You MUST output the exact, clickable URL link provided by the search tool.""",
+            RULE 1: When asked about current affairs or data, attempt to use your search tool.
+            RULE 2: If the search tool fails or returns an error, DO NOT stay silent. You must explicitly state "Live search failed" and then provide the best possible answer from your internal knowledge.
+            RULE 3: At the end of EVERY response, include a '📚 Sources' section. Provide exact URLs if you searched, or state 'Source: Internal Knowledge Base' if you didn't.""",
             tools=[search_current_affairs, read_webpage], 
         )
     )
@@ -362,24 +366,23 @@ if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] 
             if "uploaded_file" in st.session_state and st.session_state.uploaded_file:
                 prompt_data[0] = f"[File attached: {st.session_state.uploaded_file.name}] {prompt_data[0]}"
                 
+           # ... [Inside your try block in Section 7] ...
             with st.status("🧠 Agent is thinking and gathering sources...", expanded=True) as status:
                 st.write("Connecting to AI engine...")
-                
-                # The actual API call
                 response_stream = st.session_state.agent.send_message_stream(prompt_data)
-                
                 status.update(label="💡 Answer synthesized!", state="complete", expanded=False)
                 
-            # Stream the text to the screen
-            full_response = st.write_stream((chunk.text for chunk in response_stream))
+            # Stream the text, explicitly grabbing only chunks that have text
+            full_response = st.write_stream((chunk.text for chunk in response_stream if chunk.text))
             
-            # Save the successful response to memory
+            # THE BLANK CATCH: If the AI returns nothing, force an error message!
+            if not full_response or not full_response.strip():
+                full_response = "⚠️ I encountered an internal error and could not generate a response. Please ask your question again."
+                st.error(full_response)
+            
+            # Save the response to memory and refresh
             st.session_state.messages.append({"role": "assistant", "content": full_response})
-            st.rerun() # Force a UI refresh to lock the message in and show the action buttons
+            st.rerun() 
             
         except Exception as e:
-            # THE GHOST TRAP: If anything fails, write it into the chat history permanently
-            error_msg = f"⚠️ System Failure: {str(e)}"
-            st.error(error_msg)
-            st.session_state.messages.append({"role": "assistant", "content": error_msg})
-            st.rerun() # Refresh so the user actually sees the error!
+            # ... [Keep your Ghost Trap except block here] ...
