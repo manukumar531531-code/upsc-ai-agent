@@ -14,8 +14,16 @@ import pandas as pd
 import textwrap
 from fpdf import FPDF
 from PIL import ImageDraw
+from gtts import gTTS
 
 # --- THE FILE EXPORT FACTORY ---
+def create_audio(text):
+    # gTTS requires plain text, so we clean it up slightly if needed
+    tts = gTTS(text=text, lang='en', slow=False)
+    bio = io.BytesIO()
+    tts.write_to_fp(bio)
+    return bio.getvalue()
+    
 def create_pdf(text):
     pdf = FPDF()
     pdf.add_page()
@@ -170,57 +178,38 @@ for i, msg in enumerate(st.session_state.messages):
             
             # The Action Bar (Small buttons packed tightly underneath the message)
             st.write("") # Small spacer
-            act_col1, act_col2, act_col3, _ = st.columns([1.2, 1.2, 1.2, 5])
+            # We added a 4th column for the Audio button
+            act_col1, act_col2, act_col3, act_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 4])
             
+            # ... (Keep your existing act_col1 for Edit) ...
             with act_col1:
-                # EDIT BUTTON
                 if st.button("✏️ Edit", key=f"edit_btn_{i}", help="Edit this message"):
                     st.session_state[f"edit_mode_{i}"] = True
                     st.rerun()
                     
+            # ... (Keep your existing act_col2 for Save) ...
             with act_col2:
-                # THE ULTIMATE EXPORT MENU
-                with st.popover("💾 Save As...", help="Download in multiple formats"):
-                    st.caption("Choose export format:")
-                    
-                    # 1. PDF Export
-                    st.download_button("📄 PDF Document", 
-                        data=create_pdf(msg["content"]), 
-                        file_name=f"Study_Note_{i}.pdf", 
-                        mime="application/pdf", 
-                        key=f"pdf_{i}",
-                        use_container_width=True)
-                        
-                    # 2. Word Document Export
-                    st.download_button("📝 Word Document", 
-                        data=create_docx(msg["content"]), 
-                        file_name=f"Study_Note_{i}.docx", 
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                        key=f"docx_{i}",
-                        use_container_width=True)
-                        
-                    # 3. Excel Export
-                    st.download_button("📊 Excel Spreadsheet", 
-                        data=create_excel(msg["content"]), 
-                        file_name=f"Study_Note_{i}.xlsx", 
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                        key=f"xls_{i}",
-                        use_container_width=True)
-                        
-                    # 4. Image Export
-                    st.download_button("🖼️ Image File", 
-                        data=create_image(msg["content"]), 
-                        file_name=f"Study_Note_{i}.png", 
-                        mime="image/png", 
-                        key=f"img_{i}",
-                        use_container_width=True)
-                
+                with st.popover("💾 Save As..."):
+                    st.download_button("📄 PDF Document", data=create_pdf(msg["content"]), file_name=f"Note_{i}.pdf", mime="application/pdf", key=f"pdf_{i}", use_container_width=True)
+                    st.download_button("📝 Word Document", data=create_docx(msg["content"]), file_name=f"Note_{i}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"docx_{i}", use_container_width=True)
+                    st.download_button("📊 Excel Spreadsheet", data=create_excel(msg["content"]), file_name=f"Note_{i}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"xls_{i}", use_container_width=True)
+                    st.download_button("🖼️ Image File", data=create_image(msg["content"]), file_name=f"Note_{i}.png", mime="image/png", key=f"img_{i}", use_container_width=True)
+            
+            # ... (Keep your existing act_col3 for Copy) ...
             with act_col3:
-                # COPY BUTTON (The Streamlit Clipboard Hack)
-                with st.popover("📋 Copy", help="Copy to clipboard"):
-                    st.caption("Click the copy icon in the top right of this box:")
-                    # st.code has a built-in native clipboard copy icon!
+                with st.popover("📋 Copy"):
+                    st.caption("Click the copy icon in the top right:")
                     st.code(msg["content"], language="markdown")
+                    
+            # --- THE NEW AUDIO COLUMN ---
+            with act_col4:
+                with st.popover("🔊 Listen", help="Read this message out loud"):
+                    st.caption("Generate voice audio:")
+                    # We use a button inside the popover so it only generates the audio when explicitly clicked (saves bandwidth)
+                    if st.button("▶️ Generate Audio", key=f"gen_audio_{i}", use_container_width=True):
+                        with st.spinner("Synthesizing voice..."):
+                            audio_bytes = create_audio(msg["content"])
+                            st.audio(audio_bytes, format="audio/mp3")
 # --- 6. THE BOTTOM CONTROL BAR (Screenshot 1 Replication) ---
 # We build a floating control deck right above the text input
 st.write("") 
