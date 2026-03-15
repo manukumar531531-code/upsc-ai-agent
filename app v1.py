@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import tempfile
 import os
+import io
 import pypdf
 import docx
 from PIL import Image
