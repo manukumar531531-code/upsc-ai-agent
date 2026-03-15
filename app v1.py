@@ -128,7 +128,11 @@ if "agent" not in st.session_state:
     st.session_state.agent = client.chats.create(
         model='gemini-3-flash-preview', 
         config=types.GenerateContentConfig(
-            system_instruction="You are a highly advanced multimodal AI assistant.",
+            system_instruction="""You are an elite, highly advanced UPSC AI assistant.
+            RULE 1: Provide clear, detailed, and structured answers using Markdown.
+            RULE 2: At the very end of EVERY response, you MUST include a '📚 Sources & References' section. 
+            - If you used your web search or link reader tools, list the exact URLs, headlines, or domain names you read.
+            - If you did not need the web and relied on your internal memory, explicitly state 'Source: Internal Knowledge Base'.""",
             tools=[search_current_affairs, read_webpage], 
         )
     )
@@ -274,21 +278,29 @@ if user_prompt := st.chat_input("Ask a question..."):
     st.rerun()
 
 # Trigger AI response if the last message was from the user
+# Trigger AI response if the last message was from the user
 if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="✨"):
         try:
             prompt_data = [st.session_state.messages[-1]["content"]]
             
-            # If a file was uploaded via the '+' button, attach it here (logic kept simple for this UI demo)
             if "uploaded_file" in st.session_state and st.session_state.uploaded_file:
                 prompt_data[0] = f"[File attached: {st.session_state.uploaded_file.name}] {prompt_data[0]}"
                 
-            with st.spinner("Synthesizing..."):
+            # --- THE NEW THINKING UI ---
+            with st.status("🧠 Agent is thinking and gathering sources...", expanded=True) as status:
+                st.write("Analyzing query context...")
+                st.write("Accessing web tools and reading documents if necessary...")
+                
+                # The AI does its processing here while the box spins
                 response_stream = st.session_state.agent.send_message_stream(prompt_data)
                 
+                # Collapse the box and show a success message when it's ready to type
+                status.update(label="💡 Answer synthesized!", state="complete", expanded=False)
+                
+            # The typewriter effect streams the final answer below the collapsed thinking box
             full_response = st.write_stream((chunk.text for chunk in response_stream))
             
-            # Save unless incognito is toggled
             if not incognito:
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
             
