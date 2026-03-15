@@ -96,12 +96,60 @@ if len(st.session_state.messages) == 0:
     
     st.write("\n\n") # Push the chat input to the bottom
 
-# --- 5. THE CHAT HISTORY ---
-for msg in st.session_state.messages:
+# --- 5. THE ADVANCED CHAT HISTORY (With Actions) ---
+for i, msg in enumerate(st.session_state.messages):
     avatar_icon = "🧑‍💻" if msg["role"] == "user" else "✨"
+    
     with st.chat_message(msg["role"], avatar=avatar_icon):
-        st.markdown(msg["content"])
-
+        
+        # 1. Check if the user clicked "Edit" for this specific message
+        if st.session_state.get(f"edit_mode_{i}", False):
+            # Show an interactive text box instead of normal text
+            new_text = st.text_area("Update message:", value=msg["content"], key=f"text_area_{i}")
+            
+            # Save or Cancel buttons for the edit
+            edit_col1, edit_col2, _ = st.columns([1, 1, 4])
+            with edit_col1:
+                if st.button("✅ Save", key=f"save_edit_{i}"):
+                    st.session_state.messages[i]["content"] = new_text
+                    st.session_state[f"edit_mode_{i}"] = False
+                    st.rerun()
+            with edit_col2:
+                if st.button("❌ Cancel", key=f"cancel_edit_{i}"):
+                    st.session_state[f"edit_mode_{i}"] = False
+                    st.rerun()
+                    
+        # 2. Normal Display Mode
+        else:
+            st.markdown(msg["content"])
+            
+            # The Action Bar (Small buttons packed tightly underneath the message)
+            st.write("") # Small spacer
+            act_col1, act_col2, act_col3, _ = st.columns([1.2, 1.2, 1.2, 5])
+            
+            with act_col1:
+                # EDIT BUTTON
+                if st.button("✏️ Edit", key=f"edit_btn_{i}", help="Edit this message"):
+                    st.session_state[f"edit_mode_{i}"] = True
+                    st.rerun()
+                    
+            with act_col2:
+                # SAVE BUTTON (Downloads to hard drive)
+                st.download_button(
+                    "💾 Save", 
+                    data=msg["content"], 
+                    file_name=f"Study_Note_{i}.txt", 
+                    mime="text/plain", 
+                    key=f"save_btn_{i}", 
+                    help="Download as text file"
+                )
+                
+            with act_col3:
+                # COPY BUTTON (The Streamlit Clipboard Hack)
+                with st.popover("📋 Copy", help="Copy to clipboard"):
+                    st.caption("Click the copy icon in the top right of this box:")
+                    # st.code has a built-in native clipboard copy icon!
+                    st.code(msg["content"], language="markdown")
 # --- 6. THE BOTTOM CONTROL BAR (Screenshot 1 Replication) ---
 # We build a floating control deck right above the text input
 st.write("") 
