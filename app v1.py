@@ -179,15 +179,41 @@ for i, msg in enumerate(st.session_state.messages):
                     st.rerun()
                     
             with act_col2:
-                # SAVE BUTTON (Downloads to hard drive)
-                st.download_button(
-                    "💾 Save", 
-                    data=msg["content"], 
-                    file_name=f"Study_Note_{i}.txt", 
-                    mime="text/plain", 
-                    key=f"save_btn_{i}", 
-                    help="Download as text file"
-                )
+                # THE ULTIMATE EXPORT MENU
+                with st.popover("💾 Save As...", help="Download in multiple formats"):
+                    st.caption("Choose export format:")
+                    
+                    # 1. PDF Export
+                    st.download_button("📄 PDF Document", 
+                        data=create_pdf(msg["content"]), 
+                        file_name=f"Study_Note_{i}.pdf", 
+                        mime="application/pdf", 
+                        key=f"pdf_{i}",
+                        use_container_width=True)
+                        
+                    # 2. Word Document Export
+                    st.download_button("📝 Word Document", 
+                        data=create_docx(msg["content"]), 
+                        file_name=f"Study_Note_{i}.docx", 
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                        key=f"docx_{i}",
+                        use_container_width=True)
+                        
+                    # 3. Excel Export
+                    st.download_button("📊 Excel Spreadsheet", 
+                        data=create_excel(msg["content"]), 
+                        file_name=f"Study_Note_{i}.xlsx", 
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                        key=f"xls_{i}",
+                        use_container_width=True)
+                        
+                    # 4. Image Export
+                    st.download_button("🖼️ Image File", 
+                        data=create_image(msg["content"]), 
+                        file_name=f"Study_Note_{i}.png", 
+                        mime="image/png", 
+                        key=f"img_{i}",
+                        use_container_width=True)
                 
             with act_col3:
                 # COPY BUTTON (The Streamlit Clipboard Hack)
