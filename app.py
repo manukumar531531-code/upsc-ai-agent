@@ -61,7 +61,32 @@ if "agent" not in st.session_state:
             tools=[search_current_affairs, read_webpage], 
         )
     )
-
+# --- 4.5. THE SIDEBAR (Drag-and-Drop Uploader) ---
+with st.sidebar:
+    st.header("📂 Upload Study Notes")
+    st.caption("Drag and drop a file to let the AI read it.")
+    
+    # The modern drag-and-drop widget
+    uploaded_file = st.file_uploader(
+        "Upload a document", 
+        type=['txt', 'csv'], # Restricting to text/csv for simple reading right now
+        accept_multiple_files=False
+    )
+    
+    # What happens when the user drops a file
+    if uploaded_file is not None:
+        st.success(f"File '{uploaded_file.name}' loaded successfully!")
+        
+        # Read the file's contents
+        try:
+            document_text = uploaded_file.read().decode("utf-8")
+            
+            # Save the text to the app's memory so the AI can access it
+            st.session_state.uploaded_context = document_text
+            st.info("Document text extracted and ready for the AI!")
+            
+        except Exception as e:
+            st.error(f"Failed to read file: {e}")
 # --- 5. THE CHAT INTERFACE ---
 # Display all past messages
 for msg in st.session_state.messages:
@@ -81,9 +106,18 @@ if user_prompt := st.chat_input("Ask a question or paste a link..."):
         message_placeholder.markdown("*(Thinking...)*")
         
         try:
-            response = st.session_state.agent.send_message(user_prompt)
+            # Check if a document was uploaded
+            if "uploaded_context" in st.session_state and st.session_state.uploaded_context:
+                # Secretly attach the document text to the user's prompt so the AI can read it
+                augmented_prompt = f"Here is the reference document:\n\n{st.session_state.uploaded_context}\n\nUser Question: {user_prompt}"
+                response = st.session_state.agent.send_message(augmented_prompt)
+            else:
+                # Normal chat if no document is uploaded
+                response = st.session_state.agent.send_message(user_prompt)
+                
             message_placeholder.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
         except Exception as e:
             error_msg = f"An error occurred: {str(e)}"
             message_placeholder.error(error_msg)
