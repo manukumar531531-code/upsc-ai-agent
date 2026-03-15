@@ -350,13 +350,10 @@ with ctrl_col4:
     st.button("🎙️", help="Voice Input coming soon")
 
 # --- 7. THE CHAT INPUT & FAILSAFE LOGIC ---
-
-# 1. Capture user input and instantly refresh the screen
 if user_prompt := st.chat_input("Ask a question..."):
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     st.rerun()
 
-# 2. Trigger the AI ONLY if the last person to speak was the user
 if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="✨"):
         try:
@@ -366,10 +363,12 @@ if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] 
             if "uploaded_file" in st.session_state and st.session_state.uploaded_file:
                 prompt_data[0] = f"[File attached: {st.session_state.uploaded_file.name}] {prompt_data[0]}"
                 
-           # ... [Inside your try block in Section 7] ...
             with st.status("🧠 Agent is thinking and gathering sources...", expanded=True) as status:
                 st.write("Connecting to AI engine...")
+                
+                # The actual API call
                 response_stream = st.session_state.agent.send_message_stream(prompt_data)
+                
                 status.update(label="💡 Answer synthesized!", state="complete", expanded=False)
                 
             # Stream the text, explicitly grabbing only chunks that have text
@@ -380,9 +379,13 @@ if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] 
                 full_response = "⚠️ I encountered an internal error and could not generate a response. Please ask your question again."
                 st.error(full_response)
             
-            # Save the response to memory and refresh
+            # Save the successful response to memory
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             st.rerun() 
             
         except Exception as e:
-            # ... [Keep your Ghost Trap except block here] ...
+            # THE GHOST TRAP: If anything fails, write it into the chat history permanently
+            error_msg = f"⚠️ System Failure: {str(e)}"
+            st.error(error_msg)
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            st.rerun()
