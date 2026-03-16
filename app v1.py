@@ -8,7 +8,6 @@ import docx
 from PIL import Image
 from google import genai
 from google.genai import types
-from duckduckgo_search import DDGS
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -131,21 +130,6 @@ except:
 
 client = genai.Client(api_key=api_key)
 
-# --- (Keep your Tools here: search_current_affairs, read_webpage) ---
-# --- THE UPGRADED SEARCH TOOL ---
-def search_current_affairs(topic: str) -> str:
-    """Searches the internet for the absolute latest data and extracts exact URLs."""
-    try:
-        # We use .text() instead of .news() to get a wider range of verified facts
-        results = DDGS().text(topic, max_results=3, timelimit='w') # 'w' limits to the past week!
-        search_data = ""
-        for r in results:
-            # We explicitly grab the 'href' to get the exact clickable URL
-            search_data += f"Title: {r.get('title')}\nSnippet: {r.get('body')}\nSource Link: {r.get('href')}\n\n"
-        return search_data if search_data else "No recent data found. Try broadening the search."
-    except Exception as e:
-        return f"Search failed: {e}"
-
 def read_webpage(url: str) -> str:
     """Scrapes readable text from a standard URL."""
     try:
@@ -158,6 +142,7 @@ def read_webpage(url: str) -> str:
 # ... (Keep your read_webpage tool here) ...
 
 # --- 2. SESSION STATE (The Upgraded Brain) ---
+# --- 2. SESSION STATE (The Upgraded Brain) ---
 if "messages" not in st.session_state:
     st.session_state.messages = [] 
 
@@ -166,13 +151,14 @@ if "agent" not in st.session_state:
         model='gemini-3-flash-preview', 
         config=types.GenerateContentConfig(
             system_instruction="""You are an elite UPSC AI. The current date is March 2026.
-            RULE 1: When asked about current affairs or data, attempt to use your search tool.
-            RULE 2: If the search tool fails or returns an error, DO NOT stay silent. You must explicitly state "Live search failed" and then provide the best possible answer from your internal knowledge.
-            RULE 3: At the end of EVERY response, include a '📚 Sources' section. Provide exact URLs if you searched, or state 'Source: Internal Knowledge Base' if you didn't.""",
-            tools=[search_current_affairs, read_webpage], 
+            RULE 1: You have native access to Google Search. You MUST use it to look up current affairs, economic data, government policies, and recent news.
+            RULE 2: Do not apologize or mention your internal processes. Just provide the answer.
+            RULE 3: Always include a '📚 Sources' section at the end of your response. If you used Google Search, provide the actual domain names or links you referenced.""",
+            
+            # THE UPGRADE: We activate Gemini's native Google Search engine!
+            tools=[{"google_search": {}}, read_webpage], 
         )
     )
-
 # --- 3. THE ADVANCED SIDEBAR (Fixed) ---
 with st.sidebar:
     # Notice the st.rerun() in the lambda function to force the screen to refresh!
