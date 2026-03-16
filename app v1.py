@@ -349,42 +349,51 @@ with ctrl_col4:
     # The Mic icon
     st.button("🎙️", help="Voice Input coming soon")
 
-# --- 7. THE CHAT INPUT & FAILSAFE LOGIC ---
+# --- 7. THE CHAT INPUT & BULLETPROOF LOGIC ---
+
+# 1. Capture user input and refresh
 if user_prompt := st.chat_input("Ask a question..."):
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     st.rerun()
 
+# 2. Trigger the AI safely
 if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="✨"):
         try:
             prompt_data = [st.session_state.messages[-1]["content"]]
             
-            # Attach file context if one is uploaded
             if "uploaded_file" in st.session_state and st.session_state.uploaded_file:
                 prompt_data[0] = f"[File attached: {st.session_state.uploaded_file.name}] {prompt_data[0]}"
                 
             with st.status("🧠 Agent is thinking and gathering sources...", expanded=True) as status:
-                st.write("Connecting to AI engine...")
+                st.write("Connecting to AI engine and running tools...")
                 
-                # The actual API call
-                response_stream = st.session_state.agent.send_message_stream(prompt_data)
+                # THE FIX: We use standard send_message so the search tools don't freeze the stream!
+                response = st.session_state.agent.send_message(prompt_data)
                 
                 status.update(label="💡 Answer synthesized!", state="complete", expanded=False)
                 
-            # Stream the text, explicitly grabbing only chunks that have text
-            full_response = st.write_stream((chunk.text for chunk in response_stream if chunk.text))
+            # THE CUSTOM TYPEWRITER ENGINE
+            def stream_words(text):
+                """Fakes the streaming effect safely after the AI has finished thinking."""
+                for word in text.split(" "):
+                    yield word + " "
+                    time.sleep(0.01) # Controls the typing speed
             
-            # THE BLANK CATCH: If the AI returns nothing, force an error message!
-            if not full_response or not full_response.strip():
-                full_response = "⚠️ I encountered an internal error and could not generate a response. Please ask your question again."
-                st.error(full_response)
+            # Check if the response contains text
+            if not response.text or not response.text.strip():
+                error_msg = "⚠️ The AI processed the request but returned no text. Try asking differently."
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            else:
+                # Stream it beautifully to the screen
+                full_response = st.write_stream(stream_words(response.text))
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
             
-            # Save the successful response to memory
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
             st.rerun() 
             
         except Exception as e:
-            # THE GHOST TRAP: If anything fails, write it into the chat history permanently
+            # If it STILL fails, it will print the exact reason here
             error_msg = f"⚠️ System Failure: {str(e)}"
             st.error(error_msg)
             st.session_state.messages.append({"role": "assistant", "content": error_msg})
